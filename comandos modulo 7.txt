@@ -1,0 +1,297 @@
+Practica 1: compartir archivos entre linux utilizando NFS (1pts)
+
+
+1-) Lo primero es instalar la utilidad NFS: 
+
+dnf install -y nfs-utils 
+
+-----------------------------------------------------------------------------------------------
+
+2-) Crear la carpeta la cual vamos a compartir: 
+
+1- Vamos a: cd / 
+
+2- Aqui hay una carperta llamada "mnt" o carpeta para montar. Esta carpeta nos permite tener un conjunto de directorios dentro de ella que nos permiten compartirla con los clientes. <--- Este es un paso opcional, se puede crear en cualquier lado. 
+
+3- cd /mnt/
+
+4- ls
+
+5- mkdir OS3
+
+6- ls 
+
+7- cd OS3
+
+8- ls <--- Para verificar que o haya nada en el archivo
+-----------------------------------------------------------------------------------------------------------------------------
+
+3-) Crear los 100 archivos:
+
+1- touch Adrian{1..100}.txt
+
+-------------------------------------------------------------------------------------------------
+
+4-) Asignarle los permisos a la carpeta para que pueda ser accesible para otros usuarios:
+
+1- cd ..
+
+2- ls --- Veremos a OS3
+
+3- chmod 666 OS3/ 
+
+4- ls -l <--- para ver los permisos
+
+--------------------------------------------------
+
+5-) Ahora con la utilidad chown vamos a poder asignar el grupo o el usuario de una carpeta o de algo, el "nfsnobody y el usuario nfsnobody" (Es como una cuenta publica)
+
+1- chown nfsnobody:nfsnobody /mnt/OS3/ 
+
+2- Te saldra un error, porque primero hay que crear el usuario y el grupo nfsnobody:
+
+3- adduser nfsnobody
+
+4- groupadd nfsnobody 
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+
+6-) Ahora hay que irse al directorio exports: 
+
+1- nano /etc/exports 
+
+2- Y aqui vamos a poner: 
+
+/mnt/OS3 *(rw,sync,no_root_squash)
+
+
+3- Salimos y guardamos 
+
+
+--------------------------------------------------------------------------------------------------------------------
+
+7-) Ahora activar nuestros servicios:
+
+1- systemctl start nfs-server 
+
+2- systemctl enable nfs-server 
+
+----------------------------------------------------------------------------------------------
+
+8-) Ahora seria agregar la configuracion del archivo exports 
+
+1- sudo exportfs -rav <================ ESTAMOS DICIENDO QUE QUEREMOS REEXPORTAR LOS DIRECTORIOS Y MOSTRARA LOS DIRECTOIOS DE LOS MISMOS. 
+
+2- sudo exportfs -v <=============== Para ver los que se esta compartiendo 
+
+-------------------------------------------------------------------------------------------------
+9-) Vamos a habilitar el Firewall:
+
+1- firewall-cmd --add-service=nfs --permanent 
+
+2- firewall-cmd --add-service=rpc-bind --permanent
+
+3- firewall-cmd --add-service=mountd --permanent
+
+4- firewall-cmd --reload 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+AHORA PASAMOS AL NODO #2 
+==============================================================================================================================================================================================
+
+1-) Lo primero es instalar la utilidad NFS: 
+
+dnf install -y nfs-utils 
+
+--------------------------------------------------------------
+2- Vamos a la carpeta mnt 
+
+1- cd /mnt/ 
+
+2- mkdir nfs-OS3 
+
+3- Entramos al directorio que creamos.
+
+4- mount 192.168.100.199:/mnt/OS3 /mnt/nfs-OS3 
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+3-) Ahora lo que vamos a hacer es automatizar el mount, ya que cada vez que reiniciamos el servidor, hay que hacerlo manual.
+
+1- nano /etc/fstab
+
+Y en lo ultimo de ese documento ponemos:
+
+192.168.100.199:/mnt/OS3 /mnt/nfs-OS3 nfs defaults 0 0
+
+2- cerramos y guardamos
+
+3- reboot para reiniciar la maquina y ya cuando inicies, te tendria que aparecer los 100 archivos txt de Adrian 
+
+-----------------------------------------------------------------------------------
+=========================================================================================================================================================================================
+Practica #2  Creacion de fileserver compatible con Windows utilizando SAMBA:
+
+1-) Lo primero es instalar la utilidad SAMBA-CLIENT
+
+1- sudo dnf install samba samba-client -y 
+
+-------------------------
+
+2-) Activar los servicios:
+
+1- sudo systemctl enable smb nmb
+
+2- sudo systemctl start smb nmb 
+
+3- sudo systemctl status smb nmb 
+
+-----------------------------------------
+
+3-) Crear el directorio Samba:
+
+1- mkdir ~/samba/
+
+2- mkdir ~/samba/shared
+
+-----------------------------------
+
+4-) Crear un grupo: 
+
+1- sudo groupadd sambagrp 
+
+---------------------------------------
+
+5-) Ahora modificar mi usuario:
+
+1- sudo usermod -aG sambagrp so3-omar-cuevas-20241163 <============= PARA AGREGARME A ESE GRUPO.
+
+2- sudo smbpasswd -a so3-omar-cuevas-20241163 <============ PARA CREAR UNA CONTRA. PUSE DEL 123
+
+-----------------------------------------------------------------------------------------
+
+6-) Ahora modificar los servicios de la carpeta:
+
+1- sudo chown -R root:sambagrp ~/samba/shared
+
+2- sudo chmod g+rw -R ~/samba/shared <========= PARA ASIGNARLE LOS PERMISOS 
+
+----------------------------------------------------------------
+
+7-) Modificar el archivo de configuracion principal:
+
+1- sudo nano /etc/samba/smb.conf 
+
+Y ponemos: 
+
+[Shared]
+        path = /home/so3-omar-cuevas-20241163/samba/shared
+        valid users = @sambagrp
+        guest ok = no
+        writable = yes
+        browsable = yes
+
+2- Guardamos y cerramos. 
+
+------------------------------------------------------------------
+
+8-) Reiniciar el servicio:
+
+1- sudo systemctl restart smb nmb 
+
+
+-------------------------------------------------------------------
+10-) Crear los archivos:
+
+1- sudo touch ~/samba/shared/adrian{1..100}.txt
+
+2- ls ~/samba/shared
+
+----------------------------------------------------------
+12-) Vamos a habilitar el Firewall:
+
+1- firewall-cmd --add-service=samba --permanent 
+
+2- firewall-cmd --reload 
+
+3- sudo setenforce 0 <================ PARA QUE NO NOS CORTE CADA VEZ QUE VAYAMOS A ENTRAR DESDE LA MAQUINA DE WINDOWS
+
+4- sudo setsebool -P samba_enable_home_dirs on <============= LE ESTAMOS DICIENDO QUE NOS DE LOS PERMISOS NECESARIOS, PARA PODER ACCEDER A SAMBA
+
+5- sudo setsebool -P samba_export_all_rw on 
+
+6- sudo setenforce 1 <============== LUEGO DE ESO YA PODEMOS PRENDER SELINUX 
+
+--------------------------------------------------
+
+13-) Asignarle los permisos a los 100 txt:
+
+1- sudo chmod g+rw -R ~/samba/shared
+
+2- sudo ls -l ~/samba/shared
+
+3- sudo chown -R :sambagrp ~/samba/shared 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+AHORA PASAMOS A LA MAQUINA DE WINDOWS:
+======================================================================================================================================================================================================
+
+1- Vamos a file
+
+2- Le damos clic derecho a This PC y le damos a agregar una nueva ubicacion de red 
+
+3- \\192.168.100.199\shared 
+
+-------------------------------------------------------------------------------------------
+
+Si te aparece que no encuentra la carpeta shared, haz lo siguiente:
+
+Verifica la Ruta:
+
+1-) Asegúrate de que la ruta /home/so3-omar-cuevas-20241163/samba/shared sea correcta.
+
+Revisa si el directorio so3-omar-cuevas-20241163 existe:
+
+ls /home/so3-omar-cuevas-20241163
+
+Si no existe, verifica el nombre de usuario o la ruta.
+
+----------------------------------------------------------------------------------------------
+
+2-) Crea el Directorio:
+Si el directorio no existe, créalo con el siguiente comando:
+
+mkdir -p /home/so3-omar-cuevas-20241163/samba/shared
+
+
+---------------------------------------------------------------------------------
+
+3-) Verifica los Permisos:
+
+
+Asegúrate de que el directorio tenga los permisos correctos:
+
+sudo chmod -R 775 /home/so3-omar-cuevas-20241163/samba/shared
+sudo chown -R so3-omar-cuevas-20241163:sambagrp /home/so3-omar-cuevas-20241163/samba/shared
+
+--------------------------------------------------------------------------------------------
+
+Pasos Adicionales:
+Verifica la Existencia del Directorio:
+ls -l /home/so3-omar-cuevas-20241163/samba/shared
+------------------------------------------------------------------------
+Crea Archivos de Prueba:
+touch /home/so3-omar-cuevas-20241163/samba/shared/testfile{1..5}.txt
+
+-------------------------------------------------------------------
+Verifica el Acceso desde Windows:
+Intenta acceder a la carpeta compartida desde Windows usando la ruta:
+
+\\192.168.100.199\Shared
+
+---------------------------
+
+Para tener permiso de modificacion desde Windows 
+
+
+sudo chown -R so3-omar-cuevas-20241163:sambagrp /home/so3-omar-cuevas-20241163/samba/shared
